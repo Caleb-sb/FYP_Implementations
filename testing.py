@@ -6,6 +6,7 @@ from sklearn.metrics import mean_squared_error
 from versions.v1 import SimANC
 from versions.v2 import MicsInput
 from util.reportable import ReportPlot
+import time
 
 def calc_mse(item, heard_ambi):
     h_ambi = np.array(heard_ambi[item.order-1:item.y.size+(item.order-1)])
@@ -135,10 +136,12 @@ def version1(ref_fname = 'sounds/short_ambi_noise.wav', err_fname = 'sounds/hear
     plt.show()
 
 def version2():
-    fb_micPort = 1
-    ff_micPort = 9
-    duration = 10
-    mi = MicsInput(duration=duration, fb_micPort=fb_micPort, ff_micPort=ff_micPort)
+    inport = 21 #Merged the devices using .asoundrc
+    duration = 15
+    mi = MicsInput(duration=duration, inport=inport)
+    # print('helllllllllllllllllllllllllllllllllllllllllllllll')
+    # time.sleep(10)
+    # print("hello")
     ff_mic, fb_mic = mi.listen()
     version1(ref_fname = ff_mic, err_fname= fb_mic, ideal_needed=False)
 
