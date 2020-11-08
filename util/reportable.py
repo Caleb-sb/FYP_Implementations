@@ -21,8 +21,24 @@ class ReportPlot:
         this.ylabel = ylabel
         this.size   = size
         this.ticksize = ticksize
+        rcParams['axes.facecolor'] = 'white'
+        matplotlib.rc('xtick', labelsize=this.ticksize)
+        matplotlib.rc('ytick', labelsize=this.ticksize)
 
     def plotPy(this, x, y, label, color='', alpha = 1):
+
+
+
+        # plt.figure(figsize=this.figsize)
+        plt.title(this.title, fontproperties=this.prop, size=this.size)
+        plt.xlabel(this.xlabel, fontproperties=this.prop, size=this.size)
+        plt.ylabel(this.ylabel, fontproperties=this.prop, size=this.size)
+        if (color == '' and alpha == 1):
+            plt.plot(x, y, label=label)
+        else:
+            plt.plot(x, y, label=label, color=color, alpha=alpha)
+
+    def plotSpectrum(this, x, y, label, color='', alpha = 1):
         rcParams['axes.facecolor'] = 'white'
         matplotlib.rc('xtick', labelsize=this.ticksize)
         matplotlib.rc('ytick', labelsize=this.ticksize)
@@ -33,5 +49,7 @@ class ReportPlot:
         plt.ylabel(this.ylabel, fontproperties=this.prop, size=this.size)
         if (color == '' and alpha == 1):
             plt.plot(x, y, label=label)
+            plt.fill_between(x, y, y2=-99)
         else:
             plt.plot(x, y, label=label, color=color, alpha=alpha)
+            plt.fill_between(x, y,y2=-99)

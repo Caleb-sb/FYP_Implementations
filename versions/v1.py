@@ -2,7 +2,7 @@ import scipy.io.wavfile as wf
 import numpy as np
 from util import adaptive
 
-class SimANC:
+class Version1:
     """
     --  This is the class containing all functionality of the first iteration.
     --  Its performance will be tested by the testing.py.
@@ -23,6 +23,7 @@ class SimANC:
         self.h_ambi = np.array(h_ambi/np.max(h_ambi), dtype=np.float32)
 
         self.order = order
+        self.h = np.zeros(self.order)
         assert sr==sr2, "Samplerates must be the same for both wav files"
 
     def adapt(self, s_path=np.empty(50)):
@@ -32,12 +33,14 @@ class SimANC:
                                         taps = self.order,
                                         u = self.ambi,
                                         d = self.h_ambi,
+                                        h = self.h,
                                         music = np.zeros(self.ambi.size))
         elif (self.mode == 'nlms'):
             self.y, self.e, self.h = adaptive.NLMS_filter(
                                         taps = self.order,
                                         u = self.ambi,
                                         d = self.h_ambi,
+                                        h = self.h,
                                         music = np.zeros(self.ambi.size))
         # elif (self.mode == 'fxlms'):
         #     self.y, self.e, self.h = adaptive.FXLMS_filter(
