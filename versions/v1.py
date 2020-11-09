@@ -16,11 +16,11 @@ class Version1:
 
         sr,  ambi   = wf.read(ref_fname, True)
         self.ambi_scale = np.max(ambi)
-        self.ambi   = np.array(ambi/np.max(ambi), dtype=np.float32)
+        self.ambi   = np.array(ambi/np.max(abs(ambi)), dtype=np.float32)
 
         sr2, h_ambi = wf.read(err_fname, True)
         self.h_ambi_scale = np.max(h_ambi)
-        self.h_ambi = np.array(h_ambi/np.max(h_ambi), dtype=np.float32)
+        self.h_ambi = np.array(h_ambi/np.max(abs(h_ambi)), dtype=np.float32)
 
         self.order = order
         self.h = np.zeros(self.order)

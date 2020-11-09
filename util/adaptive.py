@@ -43,6 +43,7 @@ def LMS_filter(taps, u, d, music, h = np.zeros(50)):
     return y, e, h
 
 def NLMS_filter(taps, u, d, music, h = np.zeros(50)):
+    print("The max for u is: %f, the max for d is: %f"%(np.max(u), np.max(d)))
     assert (np.max(u) <= 1 and np.max(d) <= 1), "Data should be normalised!"
     y = np.zeros(len(u)-taps+1)
     e = np.zeros(len(u)-taps+1)
@@ -53,7 +54,7 @@ def NLMS_filter(taps, u, d, music, h = np.zeros(50)):
             e[n] = d[n+taps-1] + y[n] #- music[n]
             if taps == 51 and n>0:
                 fe[n]= np.sqrt(mse(h,ideal_filt)) # FOR THE ACCEPTANCE TEST
-            h = h + 1/(np.dot(x,x)) * x * e[n]
+            h = h + 1/(np.dot(x,x)+0.0001) * x * e[n]
     #        y[n] = -1*np.dot(x, h) #+ music[n]
     if taps == 51:
         print("hello")
