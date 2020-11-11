@@ -1,3 +1,11 @@
+'''
+This class contains all functionality for the second iteration of the ANC
+project. It should be run from testing.py once the required hardware is
+connected and the hardware ports have been specified.
+
+Author: Caleb Bredekamp (BRDCAL003)
+Date: November 2020
+'''
 import pyaudio
 import numpy as np
 import time

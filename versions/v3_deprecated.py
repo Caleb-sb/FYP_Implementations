@@ -1,14 +1,9 @@
-#!/usr/bin/env python3
+'''
+Note that this code produces an inverted wave correctly but the output is
+delayed as the indexing used is incorrect and this function is now deprecated.
+Use v3.py instead as the correct u_storage is used.
+'''
 
-"""Create a JACK client that copies input audio directly to the outputs.
-
-This is somewhat modeled after the "thru_client.c" example of JACK 2:
-http://github.com/jackaudio/jack2/blob/master/example-clients/thru_client.c
-
-If you have a microphone and loudspeakers connected, this might cause an
-acoustical feedback!
-
-"""
 import sys
 import signal
 import os
@@ -29,17 +24,14 @@ class Version3:
         self.chans = 2
         self.rate  = 44100
 
-        self.u = np.zeros(self.chunk+self.order, dtype=np.float32)
-        self.d = np.zeros(self.chunk+self.order, dtype=np.float32)
+        self.u = np.zeros(self.chunk, dtype=np.float32)
+        self.d = np.zeros(self.chunk, dtype=np.float32)
         self.res_u = np.zeros(self.order, dtype=np.float32)
         self.res_d = np.zeros(self.order, dtype=np.float32)
 ################################################################
-        self.u_storage = np.zeros(2*(self.chunk+self.order), dtype=np.float32)
-################################################################
-        self.u_rec = np.zeros(20*self.rate, dtype=np.float32)
-        self.d_rec = np.zeros(20*self.rate, dtype=np.float32)
+        self.u_rec = np.zeros(10*self.rate, dtype=np.float32)
+        self.d_rec = np.zeros(10*self.rate, dtype=np.float32)
         self.index=0
-        self.y_rec = np.zeros(20*self.rate, dtype=np.float32)
 ################################################################
         self.init = True
 
@@ -54,31 +46,27 @@ class Version3:
         if (self.init):
             # Padded with zeros which wont get processed the first time
             self.init = False
-            self.u[:self.chunk] = self.mics[0][:self.chunk]
-            self.d[:self.chunk] = self.mics[1][:self.chunk]
-
+            self.u[:self.chunk-self.order] = self.mics[0][:self.chunk-self.order]
+            self.d[:self.chunk-self.order] = self.mics[1][:self.chunk-self.order]
         else:
             # After first time, filled with residual then current values then no space for padding
             self.u[:self.order] = np.array([i for i in self.res_u])
-            self.u[self.order:] = self.mics[0][:self.chunk]
+            self.u[self.order:] = self.mics[0][:self.chunk-self.order]
             self.d[:self.order] = np.array([j for j in self.res_d])
-            self.d[self.order:] = self.mics[1][:self.chunk]
-            self.u_storage = shift_storage(self.u_storage, self.u)
+            self.d[self.order:] = self.mics[1][:self.chunk-self.order]
 
         self.res_u[:] = np.array([i for i in self.mics[0][self.chunk-self.order:]])
         self.res_d[:] = np.array([i for i in self.mics[1][self.chunk-self.order:]])
 
-        self.u_rec[self.index:self.index+self.chunk] = np.array([i for i in self.u[:self.chunk]])
-        self.d_rec[self.index:self.index+self.chunk] = np.array([i for i in self.d[:self.chunk]])
-
-        if (self.u_storage[0] != 0):
-            self.h = update(self.u_storage[0:self.chunk+self.order], self.d, self.order, self.h)
-        self.y_rec[self.index:self.index+self.chunk] = filter(self.u, self.order, self.h)
-
-        for o in (self.client.outports):
-            o.get_buffer()[:] = self.y_rec[self.index:self.index+self.chunk].tobytes()
+        self.u_rec[self.index:self.index+self.chunk] = np.array([i for i in self.u])
+        self.d_rec[self.index:self.index+self.chunk] = np.array([i for i in self.d])
 
         self.index = self.index+self.chunk
+        output=self.u
+        for o in (self.client.outports):
+            o.get_buffer()[:] = output.tobytes()
+            output=self.d
+
 
     def shutdown(self, status, reason):
         print('JACK shutdown!')
@@ -131,13 +119,11 @@ class Version3:
                 print('\nInterrupted by user')
                 wf.write('U_is_blue.wav', 44100, self.u_rec)
                 wf.write('D_is_red.wav', 44100, self.d_rec)
-                wf.write('Y_is_black.wav', 44100, self.y_rec)
-                print("Inputs and output recorded to wav files.")
+                print("Songs written?")
 #________________________________End of Class______________________________#
 
-
 @jit(nopython=True)
-def filter(u, order, h):
+def filter(u, d, order, h):
     # Preparing output
     chunk = 128
     y = np.zeros(chunk, dtype=np.float32)
@@ -146,22 +132,9 @@ def filter(u, order, h):
     for n in range(out_length):
         x  = np.flipud(u[n:n+order])
         y[n]   = -1*(x*h).sum()
-    return y
-
-@jit(nopython=True)
-def update(u, d, order, h):
-    # out_length = len(u)-order+1
-    for n in range(150):
-        x  = np.flipud(u[n:n+order])
-        e  = d[n+order-1]
+        e       = d[n+order-1] + y[n]
         h  = h + (1/((x*x).sum()+0.00001)) * x * e
-    return h
-
-@jit(nopython=True)
-def shift_storage(storage, intake):
-    storage[0:150] = np.array([i for i in storage[150:300]])
-    storage[150:300] = intake
-    return storage
+    return h, y
 
 def startCancelling():
     v3 = Version3(taps=32, chunk=128)

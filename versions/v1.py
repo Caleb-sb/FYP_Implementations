@@ -6,8 +6,7 @@ class Version1:
     """
     --  This is the class containing all functionality of the first iteration.
     --  Its performance will be tested by the testing.py.
-    --  It assumes there is a 'sounds' folder in the same directory and
-        uses the default names of 'ref_noise.wav' and 'des_noise.wav'
+    --  It assumes there is a 'sounds' folder in the same directory.
     """
     def __init__(self, order = 50, mode='nlms', ref_fname='sounds/ambi_noise.wav',
         err_fname = 'sounds/heard_ambi.wav'):

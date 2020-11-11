@@ -1,14 +1,14 @@
-#!/usr/bin/env python3
+'''
+This is the final iteration of the Active Noise Control Project. An attempt
+at live functional active noise control on cost effective hardware.
 
-"""Create a JACK client that copies input audio directly to the outputs.
+Author: Caleb Bredekamp (BRDCAL003)
+Date: November 2020
 
-This is somewhat modeled after the "thru_client.c" example of JACK 2:
-http://github.com/jackaudio/jack2/blob/master/example-clients/thru_client.c
-
-If you have a microphone and loudspeakers connected, this might cause an
-acoustical feedback!
-
-"""
+Note: This code currently produces an unstable filter on the Raspberry Pi,
+most likely due to to an indexing error or misaligned streams. The output
+device will oscillate at high volume.
+'''
 import sys
 import signal
 import os
@@ -29,14 +29,17 @@ class Version3:
         self.chans = 2
         self.rate  = 44100
 
-        self.u = np.zeros(self.chunk, dtype=np.float32)
-        self.d = np.zeros(self.chunk, dtype=np.float32)
+        self.u = np.zeros(self.chunk+self.order, dtype=np.float32)
+        self.d = np.zeros(self.chunk+self.order, dtype=np.float32)
         self.res_u = np.zeros(self.order, dtype=np.float32)
         self.res_d = np.zeros(self.order, dtype=np.float32)
 ################################################################
-        self.u_rec = np.zeros(10*self.rate, dtype=np.float32)
-        self.d_rec = np.zeros(10*self.rate, dtype=np.float32)
+        self.u_storage = np.zeros(2*(self.chunk+self.order), dtype=np.float32)
+################################################################
+        self.u_rec = np.zeros(20*self.rate, dtype=np.float32)
+        self.d_rec = np.zeros(20*self.rate, dtype=np.float32)
         self.index=0
+        self.y_rec = np.zeros(20*self.rate, dtype=np.float32)
 ################################################################
         self.init = True
 
@@ -51,28 +54,37 @@ class Version3:
         if (self.init):
             # Padded with zeros which wont get processed the first time
             self.init = False
-            self.u[:self.chunk-self.order] = self.mics[0][:self.chunk-self.order]
-            self.d[:self.chunk-self.order] = self.mics[1][:self.chunk-self.order]
+            self.u[:self.chunk] = self.mics[0][:self.chunk]
+            self.d[:self.chunk] = self.mics[1][:self.chunk]
+
         else:
             # After first time, filled with residual then current values then no space for padding
             self.u[:self.order] = np.array([i for i in self.res_u])
-            self.u[self.order:] = self.mics[0][:self.chunk-self.order]
+            self.u[self.order:] = self.mics[0][:self.chunk]
             self.d[:self.order] = np.array([j for j in self.res_d])
-            self.d[self.order:] = self.mics[1][:self.chunk-self.order]
+            self.d[self.order:] = self.mics[1][:self.chunk]
+            print(self.u.size)
+            self.u_storage = shift_storage(self.u_storage, self.u)
 
+        # For producing output of the correct size
         self.res_u[:] = np.array([i for i in self.mics[0][self.chunk-self.order:]])
         self.res_d[:] = np.array([i for i in self.mics[1][self.chunk-self.order:]])
 
-        self.u_rec[self.index:self.index+self.chunk] = np.array([i for i in self.u])
-        self.d_rec[self.index:self.index+self.chunk] = np.array([i for i in self.d])
+        # For reporting purposes
+        self.u_rec[self.index:self.index+self.chunk] = np.array([i for i in self.u[:self.chunk]])
+        self.d_rec[self.index:self.index+self.chunk] = np.array([i for i in self.d[:self.chunk]])
+
+        if (self.u_storage[0] != 0):
+            self.h = update(self.u_storage[0:self.chunk+self.order], self.d, self.order, self.h)
+        self.y_rec[self.index:self.index+self.chunk] = filter(self.u, self.order, self.h)
+
+        for o in (self.client.outports):
+            o.get_buffer()[:] = self.y_rec[self.index:self.index+self.chunk].tobytes()
 
         self.index = self.index+self.chunk
-        output=self.u
-        for o in (self.client.outports):
-            o.get_buffer()[:] = output.tobytes()
-            output=self.d
 
-
+# Functions adapted from thru_client.py on the JACK_Client Documentation
+# Perform JACK administration and organise callbacks
     def shutdown(self, status, reason):
         print('JACK shutdown!')
         print('status:', status)
@@ -99,9 +111,6 @@ class Version3:
 
 
         with self.client:
-        # When entering this with-statement, client.activate() is called.
-        # This tells the JACK server that we are ready to roll.
-        # Our process() callback will start running now.
 
             capture = self.client.get_ports(is_physical=True, is_output=True)
             if not capture:
@@ -124,11 +133,13 @@ class Version3:
                 print('\nInterrupted by user')
                 wf.write('U_is_blue.wav', 44100, self.u_rec)
                 wf.write('D_is_red.wav', 44100, self.d_rec)
-                print("Songs written?")
+                wf.write('Y_is_black.wav', 44100, self.y_rec)
+                print("Inputs and output recorded to wav files.")
 #________________________________End of Class______________________________#
 
+
 @jit(nopython=True)
-def filter(u, d, order, h):
+def filter(u, order, h):
     # Preparing output
     chunk = 128
     y = np.zeros(chunk, dtype=np.float32)
@@ -137,9 +148,25 @@ def filter(u, d, order, h):
     for n in range(out_length):
         x  = np.flipud(u[n:n+order])
         y[n]   = -1*(x*h).sum()
-        e       = d[n+order-1] + y[n]
-        h  = h + (1/((x*x).sum()+0.00001)) * x * e
-    return h, y
+    return y
+
+@jit(nopython=True)
+def update(u, d, order, h):
+    out_length = len(u)-order+1
+    for n in range(out_length):
+        x  = np.flipud(u[n:n+order])
+        e  = d[n+order-1]
+        if ((x*x).sum() == 0):
+            continue
+        else:
+            h  = h + (1/((x*x).sum())) * x * e
+    return h
+
+@jit(nopython=True)
+def shift_storage(storage, intake):
+    storage[0:160] = np.array([i for i in storage[160:320]])
+    storage[160:320] = intake
+    return storage
 
 def startCancelling():
     v3 = Version3(taps=32, chunk=128)
