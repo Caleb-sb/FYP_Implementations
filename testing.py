@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
 from versions.v1 import Version1
 from versions.v2 import Version2
+from versions import v3
 from util.reportable import ReportPlot
 from util.spectra import *
 
@@ -166,7 +167,7 @@ def version2(duration):
 
 
 def version3():
-    return 3
+    v3.startCancelling()
 
 def main(iteration=1, duration=None):
     if (iteration == 1):
